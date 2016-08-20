@@ -14,11 +14,8 @@ import sys
 DEVNULL = open(os.devnull, 'wb')
 
 exploitCmds = {'runpoc', 'dump', 'getmodules', 'getpid'}
-exploitCmd 	= ''
-
-def runExploitCommand():
-	print "A command requiring code execution has been called. To continue the console, please refresh the page on your PS4 system..."
-	pass
+exploitCmd  = ''
+exploitPage = ''
 
 def runConsoleInterpretter():
 	while True:
@@ -28,6 +25,7 @@ def runConsoleInterpretter():
 
 		if command in exploitCmds:
 			exploitCmd = command
+			print "A command requiring code execution has been called. To continue the console, please refresh the page on your PS4 system..."
 			break
 
 		if command == "authors":
@@ -70,7 +68,7 @@ def runConsoleInterpretter():
 			os._exit(0)
 
 	if exploitCmd != '':
-		runExploitCommand()
+		return exploitCmd
 
 	return
 
@@ -82,15 +80,24 @@ class PS4Console(SimpleHTTPServer.SimpleHTTPRequestHandler):
 			self.send_header("Content-type", "text/html")
 			self.end_headers()
 			path = self.path[1:]
+			self.wfile.write(open(path).read())
 		else:
 			self.send_response(200);
 			self.send_header("Content-type", "text/html")
 			self.end_headers()
-			runConsoleInterpretter()
-		pass
+
+			if runConsoleInterpretter() == 'runpoc':
+				print("\r")
+				print("[ PS4Console Version 1.1 - POC Test ]")
+				print("\r")
+				self.wfile.write(open('runpoc.html').read())
 
 	def do_POST(self):
-		pass
+		if '/debug/log' in self.path:
+			data_string = self.rfile.read(int(self.headers['Content-Length']))
+			self.send_response(200)
+			self.end_headers()
+			print data_string
 
 	def log_message(self, format, *args):
 		return
