@@ -16,10 +16,30 @@ The latest version is 0.1. More of the project will be implemented in future com
 # Notes
 The exploit will not run correctly all of the time. If it doesn't work, just keep trying until it does, it shouldn't take long.
 
+---
+
 If you're on a linux system, you may need root permissions to run PS4Console on port 80, so you may need to run it via:
 ```
 sudo python ps4console.py
 ```
+
+Even after shutting down the program via shutdown command or ctrl + c, the service will still run on port 53/port 80. To fix this, you can use the following command for Linux:
+```
+sudo kill `sudo lsof -t -i:80`
+sudo kill `sudo lsof -t -i:53`
+```
+
+Similarily, if you run into this problem on Windows, you can use the following commands:
+```
+netstat -o -n -a | findstr 0.0:3000
+```
+
+This will return something like TCP    0.0.0.0:3000      0.0.0.0:0              LISTENING       [PID], using the PID given, run:
+```
+taskkill /F /PID [PID FROM ABOVE COMMAND]
+```
+
+If anyone knows a permanent fix for this problem, feel free to fork the repo and submit a pull request.
 
 # Documentation
 Documentation is currently not existant for PS4Console, however it will be implemented in a future commit.
