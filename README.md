@@ -1,4 +1,4 @@
-4Console
+# PS4Console
 PS4Console is a project that is meant to be a successor of the PS4 Playground for 3.55. It is a python-based program that can be run on any Linux/Windows/Mac system and allows you to interface with the PlayStation 4 with the 3.55 exploit. The program simulates a terminal-like environment that allows you to send commands to the exploit being ran on the PS4, almost as if you were in the terminal. The program automatically runs fakedns.py when it is initiated, so using the User Guide would be the quickest and easiest way to use PS4Console.
 
 # PS4Console vs PS4-Playground 3.55
