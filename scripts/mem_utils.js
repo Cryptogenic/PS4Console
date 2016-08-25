@@ -40,6 +40,14 @@ function read_data(addr, len) {
     return ret;
 }
 
+function read_data8(addr, size) {
+    var v = new Uint8Array(size);
+    for(var i = 0; i < size; i++) {
+        v[i] = read8(addr + i)
+    }
+    return v;
+}
+
 
 function write8(addr, val) {
     var old_low = cbuf[0x14]

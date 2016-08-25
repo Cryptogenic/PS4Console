@@ -13,9 +13,9 @@ import sys
 
 DEVNULL = open(os.devnull, 'wb')
 
-exploitCmds = {'runpoc', 'dump', 'getmodules', 'getpid', 'getsysinfo'}
+exploitCmds = {'runpoc', 'dump', 'getmodules', 'getpid', 'getsysinfo', 'ls'}
 exploitCmd  = ''
-exploitPage = ''
+browserPage = '/'
 
 def runConsoleInterpretter():
 	while True:
@@ -27,6 +27,29 @@ def runConsoleInterpretter():
 			exploitCmd = command
 			print "A command requiring code execution has been called. To continue the console, please refresh the page on your PS4 system..."
 			break
+		elif " " in command:
+			if command[0:command.index(" ")] in exploitCmds:
+				exploitCmd = command
+				print "A command requiring code execution has been called. To continue the console, please refresh the page on your PS4 system..."
+				break
+
+		if command[0:2] == "cd":
+                                global browserPage
+
+				if command[3] == '/':
+					browserPage = command[3:]
+				elif command[3:5] == '..':
+					pass
+				elif command[3:5] == './':
+					browserPage += command[4:]
+				else: # Must be relative
+					if browserPage[-1:] == '/':
+						browserPage += command[3:]
+					else:
+						browserPage += '/' + command[3:]
+						
+
+                                print("Directory changed to: [" + browserPage + "]")
 
 		if command == "authors":
 			print("\r")
@@ -53,14 +76,13 @@ def runConsoleInterpretter():
 			print("List of commands:")
 			print("-")
 			print("authors")
+			print("cd [new dir]")
 			print("clear")
-			print("dump")
-			print("!!! getaddress {vtable/webkit/[module ID]}")
+			print("dump {file/module} [file name/module name/module id]")
 			print("getmodules")
 			print("getpid")
-			print("!!! getsysinfo")
-			print("!!! getversion {webkit/firmware}")
 			print("help")
+			print("ls")
 			print("runpoc")
 			print("shutdown (server, not system)")
 			print("\r\r")
@@ -83,17 +105,18 @@ class PS4Console(SimpleHTTPServer.SimpleHTTPRequestHandler):
 			self.end_headers()
 			path = self.path[1:]
 			self.wfile.write(open(path).read())
-		elif 'moduleToDump.txt' in self.path:
-			self.send_response(200)
-			self.send_header("Content-type", "text/html")
-			self.end_headers()
-			self.wfile.write(open("moduleToDump.txt").read())
 		else:
 			self.send_response(200);
 			self.send_header("Content-type", "text/html")
 			self.end_headers()
 
 			cmdToRun = runConsoleInterpretter()
+
+			if cmdToRun == 'ls':
+				print("\r")
+				print("[ PS4Console Version 1.1 - List Directory ]")
+				print("\r")
+				self.wfile.write("<script>var currentDir = \"" + browserPage + "\";</script>" + open('pages/ls.html').read())
 
 			if cmdToRun == 'runpoc':
 				print("\r")
@@ -112,36 +135,52 @@ class PS4Console(SimpleHTTPServer.SimpleHTTPRequestHandler):
 				print "One of the two WebKit PID's is:",
 				self.wfile.write(open('pages/getpid.html').read())
 
-			# Here we will have sub-input for parameters
-			if cmdToRun == 'dump':
+			if cmdToRun == 'getsysinfo':
 				print("\r")
-				print("[ PS4Console Version 1.1 - Module Dumper ]")
+				print("[ PS4Console Version 1.1 - System Information ]")
+				self.wfile.write(open('pages/getsysinfo.html').read())
+
+			if cmdToRun[0:4] == 'dump':
+				print("\r")
+				print("[ PS4Console Version 1.1 - Module/File Dumper ]")
 				print("\r")
 
-				print "Enter the name or ID (including 0x prefix) of the module you wish to dump: ",
+				if 'module' in cmdToRun:
+					# List of valid modules for dumping
+					validModuleNames = ["libSceSysmodule", "libSceNetCtl", "libSceRegMgr", "libSceRtc", "libScePad", "libSceOrbisCompat", "libSceSysCore", "libSceSystemService", "libSceSsl"]
+					validModuleIDs	 = ["0xC", "0x1B", "0x1F", "0x20", "0x21", "0x23", "0x25", "0x26", "0x35"]
 
-				nameModule = raw_input()
+					moduleToDump = ""
 
-				if nameModule == 'libSceSysmodule' or nameModule == '0xc':
-					self.wfile.write(open('pages/dumping/dump-sysmodule.html').read())
-				elif nameModule == 'libSceNetCtl' or nameModule == '0x1b':
-					self.wfile.write(open('pages/dumping/dump-netctl.html').read())
-				elif nameModule == 'libSceRegMgr' or nameModule == '0x1f':
-					self.wfile.write(open('pages/dumping/dump-regmgr.html').read())
-				elif nameModule == 'libSceRtc' or nameModule == '0x20':
-					self.wfile.write(open('pages/dumping/dump-scertc.html').read())
-				elif nameModule == 'libScePad' or nameModule == '0x21':
-					self.wfile.write(open('pages/dumping/dump-scepad.html').read())
-				elif nameModule == 'libSceOrbisCompat' or nameModule == '0x23':
-					self.wfile.write(open('pages/dumping/dump-orbis.html').read())
-				elif nameModule == 'libSceSysCore' or nameModule == '0x25':
-					self.wfile.write(open('pages/dumping/dump-syscore.html').read())
-				elif nameModule == 'libSceSystemService' or nameModule == '0x26':
-					self.wfile.write(open('pages/dumping/dump-sysserv.html').read())
-				elif nameModule == 'libSceSsl' or nameModule == '0x35':
-					self.wfile.write(open('pages/dumping/dump-scessl.html').read())
-				else:
-					print "You are attempting to dump an unknown or unsupported module..."
+					if cmdToRun[12:] in validModuleNames:
+						# Loop through the array to get the index, then get the module ID from this index
+						moduleIndex = -1;
+
+						for x in range(0, len(validModuleNames)):
+							if validModuleNames[x] == cmdToRun[12:]:
+								moduleIndex = x
+								break
+
+						if moduleIndex != -1:
+							moduleToDump = validModuleIDs[x]
+						else:
+							print "Module name does not have a corresponding module ID"
+
+					elif cmdToRun[12:] in validModuleIDs:
+						moduleToDump = cmdToRun[12:]
+
+					else:
+						print "You are attempting to dump an unknown or unsupported module..."
+
+					if moduleToDump != "":
+						print "Preparing to dump module with ID [" + moduleToDump + "]..."
+						self.wfile.write("<script>var moduleToDump = \"" + moduleToDump + "\";</script>" + open('pages/dump-module.html').read())
+
+				elif 'file' in cmdToRun:
+					# We must open the file via syscall open, then read via syscall read
+					fileToDump = browserPage + "/" + cmdToRun[10:]
+					print "Preparing to dump file of name [" + fileToDump + "]..."
+					self.wfile.write("<script>var fileToDump = \"" + fileToDump + "\";</script>" + open('pages/dump-file.html').read())
 
 	def do_POST(self):
 		if '/debug/log' in self.path:
@@ -161,6 +200,16 @@ class PS4Console(SimpleHTTPServer.SimpleHTTPRequestHandler):
 			f.close()
 
 			print 'Module has been dumped to %s' % filename
+
+		if '/debug/file' in self.path:
+			filename = self.path.split("/")[-1]
+
+			dataString = self.rfile.read(int(self.headers['Content-length']))
+			self.send_response(200)
+			self.end_headers()
+			f = open('Dumps/Files/' + filename, mode='wb')
+			f.write(dataString)
+			f.close()
 
 	def log_message(self, format, *args):
 		return

@@ -7,6 +7,18 @@
 <script src="/scripts/gadgets.js"></script>
 
 <script>
+    var moduleSizes = [];
+
+    moduleSizes[0xC]  = 0x4000;
+    moduleSizes[0x1B] = 0x2000;
+    moduleSizes[0x1F] = 0x1000;
+    moduleSizes[0x20] = 0x1000;
+    moduleSizes[0x21] = 0x2000;
+    moduleSizes[0x23] = 0x57000;
+    moduleSizes[0x25] = 0x26A2;
+    moduleSizes[0x26] = 0x5000;
+    moduleSizes[0x35] = 0x12000;
+
     try {
         var ua = window.navigator.userAgent;
         var supportedUAs = Object.getOwnPropertyNames(gadgetMap);
@@ -180,7 +192,7 @@
 
 	var rop = new RopChain();
 
-	rop.syscall(608, 0x26, 0, infoBuffer);
+	rop.syscall(608, parseInt(moduleToDump), 0, infoBuffer);
 
 	rop.add('pop rdi')
 	rop.add(retBuffer)
@@ -197,7 +209,7 @@
 
 	// Dump the module
 
-	cbuf[0x1E] = 0x5000;
+	cbuf[0x1E] = moduleSizes[parseInt(moduleToDump)];
 
 	cbuf[0x14] = info.getLowBitsUnsigned()
 	cbuf[0x15] = info.getHighBitsUnsigned()
@@ -206,8 +218,45 @@
 
 	debug_log("Dumping module...")
 
+	var moduleDumpName = ""
+
+	// Get module name by ID
+	switch(parseInt(moduleToDump))
+	{
+		case 0xC:
+			moduleDumpName = "libSceSysmodule.bin"
+			break;
+		case 0x1B:
+			moduleDumpName = "libSceNetCtl.bin"
+			break;
+		case 0x1F:
+			moduleDumpName = "libSceRegMgr.bin"
+			break;
+		case 0x20:
+			moduleDumpName = "libSceRt.bin"
+			break;
+		case 0x21:
+			moduleDumpName = "libScePad.bin"
+			break;
+		case 0x23:
+			moduleDumpName = "libSceOrbisCompat.bin"
+			break;
+		case 0x25:
+			moduleDumpName = "libSceSysCore.bin"
+			break;
+		case 0x26:
+			moduleDumpName = "libSceSystemService.bin"
+			break;
+		case 0x35:
+			moduleDumpName = "libSceSsl.bin"
+			break;
+		default:
+			moduleDumpName = "module.bin"
+			break;
+	}
+
 	$.ajax({
-		url: '/debug/bin/libSceSystemService.bin',
+		url: '/debug/bin/' + moduleDumpName,
 		type: 'POST',
 		contentType: 'application/octet-stream',
 		data: moduleBuffer,
