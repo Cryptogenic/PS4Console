@@ -84,12 +84,7 @@ def runConsoleInterpretter():
 			print("help")
 			print("ls")
 			print("runpoc")
-			print("shutdown (server, not system)")
 			print("\r\r")
-
-		if command == "shutdown":
-			print("Goodbye . . .")
-			os._exit(0)
 
 	if exploitCmd != '':
 		return exploitCmd

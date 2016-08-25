@@ -244,9 +244,10 @@
 			debug_log("We failed to read the file to dump it!")
 		}	
 	}
-
+	location.reload()
     } catch (ex) {
         document.write("<h1>Error: " + ex + "</h1>");
         debug_log("!! ERROR: " + ex);
+	location.reload()
     }
 </script>
